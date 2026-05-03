@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidInventoryItem(data) {
+      return data.keys().hasAll(['name', 'category', 'version', 'stockLevel', 'unit', 'lastUpdated']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.category in ['Book', 'Stationery', 'Electronics', 'Other'] &&
+             data.version in ['Bangla', 'English', 'N/A'] &&
+             data.stockLevel is number &&
+             data.unit is string &&
+             data.lastUpdated is string;
+    }
+
+    function isValidBranch(data) {
+      return data.keys().hasAll(['name', 'location']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.location is string;
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['itemId', 'itemName', 'itemVersion', 'type', 'quantity', 'voucherNumber', 'branchId', 'branchName', 'date']) &&
+             data.itemId is string &&
+             data.itemName is string &&
+             data.type in ['Stock In', 'Stock Out'] &&
+             data.quantity is number &&
+             data.quantity > 0 &&
+             data.voucherNumber is string &&
+             data.branchId is string &&
+             data.branchName is string &&
+             data.date is string;
+    }
+
+    match /items/{itemId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidInventoryItem(request.resource.data);
+      allow update: if isSignedIn() && isValidInventoryItem(request.resource.data);
+    }
+
+    match /branches/{branchId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidBranch(request.resource.data);
+      allow update: if isSignedIn() && isValidBranch(request.resource.data);
+    }
+
+    match /transactions/{transactionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidTransaction(request.resource.data);
+    }
+    
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}
